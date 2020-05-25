@@ -1,0 +1,91 @@
+@startuml
+
+actor Player1 as pl1
+participant MetaServer as ms
+
+participant MetaDB as db
+participant GameServer as gs
+actor Player2 as pl2
+autonumber
+== Registration ==
+par
+pl1 -[#green]> ms: Register
+
+    note left
+      Device: ID
+    end note
+ms -[#green]> db: Are credentials valid?
+ms <[#green]- db: Valid
+pl1 <[#green]- ms: Registered
+else
+pl2 -> ms: Register
+
+ms -> db: Are credentials valid?
+ms <- db: Valid
+pl2 <- ms: Registered
+end
+== Match Initialization ==
+par
+  pl1 -> ms: Request a Match
+  ms -> db: Get a list of Matches (contains second player)
+  db -> ms: Match list
+  ms -> ms: Attach player to the Match.
+      note left
+        If no avaliable Matches -> create a new one. 
+        If list is exists -> attach user to a Match (older date)
+      end note
+  ms -> gs: Attach a player to a Match or create a Match.
+  gs -> ms: Match attenders
+  ms -> db: Save Match attenders
+  ms -> pl1: Server URL and Match ID
+  pl1 -> gs: WS: StartGame(match_id, player_id)
+      loop
+        gs -> pl1: WS: 1 second tick... for 2 min. Waiting for player2
+      end
+else
+  pl2 -[#green]> ms: Request a Match
+  ms -[#green]> db: Get a list of Matches (contains second player)
+  db -[#green]> ms: Match list
+  ms -[#green]> ms: Attach player to the Match.
+      note left
+        If no avaliable Matches -> create a new one. 
+        If list is exists -> attach user to a Match (older date)
+      end note
+  ms -[#green]> gs: Attach a player to a Match or create a Match.
+  gs -[#green]> ms: Match attenders
+  ms -[#green]> db: Update Match attenders
+  ms -[#green]> pl2: Server URL and Match ID
+  pl2 -[#green]> gs: WS: StartGame(match_id, player_id)
+end
+== Game ==
+gs -> gs: Randomly select the first move player.
+par
+  gs -> pl1: WS: Game started. First
+else
+  gs -[#green]> pl2: WS: Game started. Second
+end
+loop 3 times
+  pl1 -> gs: WS: Move
+  activate gs
+  gs -> pl2: WS: Game status
+    note right
+      Game Server is waiting for another player move. 30 seconds.
+    end note
+  pl2 -> gs: WS: Move
+  gs -> pl1: WS: Game status
+  deactivate gs
+end
+
+gs -> gs: Calculate game results
+gs -> ms: Game finished
+ms -> db: Finish game, save results
+par
+  ms -> pl1: Game result
+else
+  ms -> pl2: Game result
+end
+autonumber stop
+
+
+
+@enduml
