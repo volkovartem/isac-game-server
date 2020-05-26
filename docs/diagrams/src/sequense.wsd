@@ -3,89 +3,111 @@
 actor Player1 as pl1
 participant MetaServer as ms
 
-participant MetaDB as db
+database MetaDB as db
 participant GameServer as gs
 actor Player2 as pl2
+
+== Match registration ==
+par
 autonumber
-== Registration ==
-par
-pl1 -[#green]> ms: Register
+pl1 -[#green]> ms: Register(player_id, password)
+ms -[#green]> db: GetPlayer(player_id)
+ms <[#green]- db: Player object{player_id, password, player_status}
+ms -[#green]> ms:  Verify password
+ms -[#green]> ms:  Verify that player_status is "not_in_game"
+    ms -[#green]> gs: Register a player(player_id).
+    note right: Assuming that a Game Server has \nconfigured Max number of match slots.
+    gs -[#green]> gs: Check if match slots with a second player \n exist and register the player to it. \n If no slots with a second player avaliable, register to a new slot\n
+    activate gs
+    note over gs #FFAAAA: Start a match slot waitForPlayers timer\n2 min
+    gs -[#green]> ms: Player registered (player_id, slot_id)
+    autonumber stop
+    par
+      autonumber 9
+      ms -[#green]> db: Update player status to "registered"(player_id)
+    else
+      autonumber 9
+      ms -[#green]> pl1: Registered(game_server_url, slot_id)
+    end
+    autonumber stop
+else
+autonumber
+pl2 -[#blue]> ms: Register(player_id, password)
+ms -[#blue]> db: GetPlayer(player_id)
+ms <[#blue]- db: Player object{player_id, password, player_status}
+ms -[#blue]> ms:  Verify password
+ms -[#blue]> ms:  Verify that player_status is "not_in_game"
+    ms -[#blue]> gs: Register a player(player_id)
+    gs -[#blue]> gs: Check if match slots with a second player \n exist and register the player to it. \n If no slots with a second player avaliable, register to a new slot\n
 
-    note left
-      Device: ID
-    end note
-ms -[#green]> db: Are credentials valid?
-ms <[#green]- db: Valid
-pl1 <[#green]- ms: Registered
+    gs -[#blue]> ms: Player registered (player_id, slot_id)
+    par
+      autonumber 9
+      ms -[#blue]> db: Update player status to "registered"(player_id)
+    else
+      autonumber 9
+      ms -[#blue]> pl2: Registered(game_server_url, slot_id)
+    end
+end
+== Match initialization ==
+par
+  autonumber 10
+  pl1 -> gs: WS: StartGame(player_id, slot_id)
 else
-pl2 -> ms: Register
+  autonumber 10
+  pl2 -> gs: WS: StartGame(player_id, slot_id)
+end
+gs -> db: Update player1 and player2 status \n to "in_game"
+note over gs #FFAAAA: Stop a waitForPlayers timer
+deactivate gs
+== The game ==
+gs -> gs: Randomly select who will be first.
+gs -> pl1: WS: Your move
+activate gs
+note over gs #FFAAAA: Start wait for game start timer: 30 sec
 
-ms -> db: Are credentials valid?
-ms <- db: Valid
-pl2 <- ms: Registered
-end
-== Match Initialization ==
-par
-  pl1 -> ms: Request a Match
-  ms -> db: Get a list of Matches (contains second player)
-  db -> ms: Match list
-  ms -> ms: Attach player to the Match.
-      note left
-        If no avaliable Matches -> create a new one. 
-        If list is exists -> attach user to a Match (older date)
-      end note
-  ms -> gs: Attach a player to a Match or create a Match.
-  gs -> ms: Match attenders
-  ms -> db: Save Match attenders
-  ms -> pl1: Server URL and Match ID
-  pl1 -> gs: WS: StartGame(match_id, player_id)
-      loop
-        gs -> pl1: WS: 1 second tick... for 2 min. Waiting for player2
-      end
-else
-  pl2 -[#green]> ms: Request a Match
-  ms -[#green]> db: Get a list of Matches (contains second player)
-  db -[#green]> ms: Match list
-  ms -[#green]> ms: Attach player to the Match.
-      note left
-        If no avaliable Matches -> create a new one. 
-        If list is exists -> attach user to a Match (older date)
-      end note
-  ms -[#green]> gs: Attach a player to a Match or create a Match.
-  gs -[#green]> ms: Match attenders
-  ms -[#green]> db: Update Match attenders
-  ms -[#green]> pl2: Server URL and Match ID
-  pl2 -[#green]> gs: WS: StartGame(match_id, player_id)
-end
-== Game ==
-gs -> gs: Randomly select the first move player.
-par
-  gs -> pl1: WS: Game started. First
-else
-  gs -[#green]> pl2: WS: Game started. Second
-end
+
 loop 3 times
-  pl1 -> gs: WS: Move
-  activate gs
-  gs -> pl2: WS: Game status
-    note right
-      Game Server is waiting for another player move. 30 seconds.
-    end note
-  pl2 -> gs: WS: Move
-  gs -> pl1: WS: Game status
+  pl1 -[#green]> gs: WS: Move
   deactivate gs
-end
+  note over gs #FFAAAA: Stop wait for game start timer: 30 sec
+    par
+      autonumber 15
+      gs -> gs: Save move to RAM
+      activate gs
+    else
+      autonumber 15
+      note over gs #FFAAAA: Start wait for move timer \n 30 sec
+      gs -[#blue]> pl2: WS: Game status
+    end
+  pl2 -[#blue]> gs: WS: Move
+    par
+      autonumber 17
+      gs -> gs: Save move to RAM
+      deactivate gs
+      note over gs #FFAAAA: Stop wait for move timer
+    else
+      autonumber 17
+      gs -[#green]> pl1: WS: Game status
+    end
+  deactivate gs
+  end
 
 gs -> gs: Calculate game results
-gs -> ms: Game finished
-ms -> db: Finish game, save results
+
+== End game ==
 par
-  ms -> pl1: Game result
+autonumber 19
+gs -> db: Save game results
 else
-  ms -> pl2: Game result
+autonumber 19
+gs -[#green]> pl1: WS: Send game results
+else
+autonumber 19
+gs -[#blue]> pl2: WS: Send game results
+else
+autonumber 19
+gs -> db: Update player1 andd player2 status\n to "not_in_game"       
 end
-autonumber stop
-
-
-
+gs -> gs: Mark a match slot as "Free"(slot_id)
 @enduml
