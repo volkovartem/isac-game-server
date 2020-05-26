@@ -97,17 +97,17 @@ gs -> gs: Calculate game results
 
 == End game ==
 par
-autonumber 19
-gs -> db: Save game results
+  autonumber 19
+  gs -> db: Save game results
 else
-autonumber 19
-gs -[#green]> pl1: WS: Send game results
+  autonumber 19
+  gs -[#green]> pl1: WS: Send game results
 else
-autonumber 19
-gs -[#blue]> pl2: WS: Send game results
+  autonumber 19
+  gs -[#blue]> pl2: WS: Send game results
 else
-autonumber 19
-gs -> db: Update player1 andd player2 status\n to "not_in_game"       
+  autonumber 19
+  gs -> db: Update player1 andd player2 status\n to "not_in_game"       
 end
 gs -> gs: Mark a match slot as "Free"(slot_id)
 @enduml
